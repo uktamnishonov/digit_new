@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MNIST Digit Recognizer</title>
+    <style>
+        /* Body styles */
+        body {
+            background-color: #f0f2f5; /* Light grayish-blue (trending) */
+            display: flex; /* Use flexbox for vertical centering */
+            flex-direction: column; /* Stack elements vertically */
+            align-items: center; /* Align content to center horizontally */
+            min-height: 100vh; /* Set minimum viewport height */
+            font-family: 'Poppins', sans-serif; /* Trending font */
+            font-size: 16px; /* Base font size */
+        }
+
+        /* Canvas container styles */
+        #canvas-container {
+            background-color: #212529; /* Dark grayish-blue (contrasting canvas) */
+            display: inline-block;
+            border: solid 2px #495057; /* Darker border for contrast */
+            width: 280px;
+            height: 280px;
+            margin-bottom: 20px; /* Add some margin below the canvas */
+        }
+
+        #canvas {
+            cursor: crosshair;
+            background-color: #212529; /* Match canvas container background */
+        }
+
+        #canvas::-webkit-scrollbar {
+            width: 0px;  /* Hide scrollbar */
+        }
+
+        #canvas {
+            -ms-overflow-style: none;  /* Hide scrollbar (IE and Edge) */
+            scrollbar-width: none;  /* Hide scrollbar (Firefox) */
+        }
+
+        /* Button container styles */
+        .button-container {
+            display: flex; /* Make buttons a flexbox for horizontal arrangement */
+            justify-content: space-between; /* Distribute buttons evenly */
+            margin-top: 10px; /* Add some margin for spacing */
+        }
+
+        .button-container button {
+            margin: 5px; /* Add margin to each button */
+            background-color: #495057; /* Darker grayish-blue for buttons */
+            color: white; /* White text for buttons */
+            padding: 8px 16px; /* Add some padding for buttons */
+            border: none; /* Remove button borders */
+            border-radius: 4px; /* Add rounded corners to buttons (trending) */
+            cursor: pointer; /* Indicate clickable buttons */
+            font-weight: bold; /* Bold font for buttons */
+            transition: transform 0.1s ease-in-out; /* Add button click animation */
+        }
+
+        .button-container button:hover {
+            transform: scale(1.05); /* Button hover effect (optional) */
+        }
+
+        .button-container button:active {
+            transform: scale(0.95); /* Button click animation (active state) */
+        }
+
+        /* Instructions styles */
+        #instructions {
+            margin-bottom: 10px; /* Add some margin below the instructions */
+        }
+
+        #instructions p {
+            font-size: 18px; /* Slightly larger font size for instructions */
+            margin-bottom: 5px; /* Add some margin below the instruction text */
+        }
+
+
+        /* Animation keyframes (optional, for more complex animations) */
+        @keyframes buttonClick {
+            0% { transform: scale(1); }
+            100% { transform: scale(0.9) scale(1.1); } /* Simulate a bounce effect */
+        }
+
+        .button-container button:active {
+            animation: buttonClick 0.1s ease-in-out; /* Apply animation on click */
+        }
+    </style>
+</head>
+<body>
+<h1>MNIST Digit Recognizer</h1>
+<div id="instructions">
+    <p>How to use:</p>
+    <ol>
+        <li>Draw a digit (0-9) in the canvas.</li>
+        <li>Click "Capture Drawing" to save your drawing.</li>
+        <li>Click "Predict Digit" to see the predicted digit.</li>
+    </ol>
+</div>
+<div id="canvas-container">
+    <canvas id="canvas" width="280" height="280"></canvas>
+</div>
+<br>
+<div class="button-container">
+    <button onclick="predictDigit()">Predict Digit</button>
+    <button onclick="refreshCanvas()">Refresh</button>
+    <button onclick="captureDrawing()">Capture Drawing</button>
+</div>
+<div id="result"></div>
+
+<script type="text/javascript">
+    var pixels = [];
+    for (var i = 0; i < 28*28; i++) pixels[i] = 0;
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+
+    function startDrawing(e) {
+        isDrawing = true;
+        draw(e);
+    }
+
+    function draw(e) {
+        if (!isDrawing) return;
+        ctx.fillStyle = 'white'; // Set drawing color to white
+        ctx.fillRect(e.offsetX, e.offsetY, 10, 10); // Draw a small square
+        var x = Math.floor(e.offsetY * 0.1);
+        var y = Math.floor(e.offsetX * 0.1);
+        for (var dy = 0; dy < 2; dy++){
+            for (var dx = 0; dx < 2; dx++){
+                if ((x + dx < 28) && (y + dy < 28)){
+                    pixels[(y+dy)+(x+dx)*28] = 1;
+                }
+            }
+        }
+    }
+
+    function stopDrawing() {
+        isDrawing = false;
+    }
+
+    async function predictDigit() {
+        const imageData = canvas.toDataURL(); // Convert drawn image to base64
+        const response = await fetch('/predict', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ image: imageData })
+        });
+        const result = await response.json();
+        document.getElementById('result').innerText = 'Predicted Digit: ' + result.prediction;
+    }
+
+    function refreshCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
+        document.getElementById('result').innerText = ''; // Clear prediction result
+        clearPixels();
+    }
+
+    function clearPixels() {
+        for (var i = 0; i < 28*28; i++) pixels[i] = 0;
+    }
+
+    function captureDrawing() {
+        const imageData = canvas.toDataURL(); // Convert drawn image to base64
+        // Send the captured image data to the Flask backend for further processing
+        fetch('/capture', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ image: imageData })
+        }).then(response => {
+            if (response.ok) {
+                console.log('Drawing captured successfully');
+            } else {
+                console.error('Failed to capture drawing');
+            }
+        }).catch(error => {
+            console.error('Error capturing drawing:', error);
+        });
+    }
+</script>
+</body>
+</html>
